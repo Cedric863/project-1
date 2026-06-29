@@ -5,6 +5,14 @@ import time
 from datetime import datetime, timedelta
 from scapy.all import sniff, IP, TCP, UDP, Raw # NEW: Imported 'Raw' for DPI
 
+# --- DEEP PACKET INSPECTION (DPI) SIGNATURES ---
+DPI_SIGNATURES = {
+    "SQL_INJECTION": b"' OR 1=1",
+    "DIR_TRAVERSAL": b"../../../etc/passwd",
+    "XSS_ATTACK": b"<script>alert",
+    "MALICIOUS_PROBE": b"ROOT LOGIN ATTEMPT"
+}
+
 THREAT_SIGNATURES = {}
 ENGINE_ACTIVE = True 
 
@@ -133,54 +141,43 @@ def log_alert_to_db(src_ip, dst_ip, protocol, src_port, dst_port, rule_id, threa
 
 # --- UPDATED: The DPI Core Logic ---
 def packet_callback(packet):
-    if not ENGINE_ACTIVE:
+    if not ENGINE_ACTIVE or not packet.haslayer(IP):
         return 
 
-    if packet.haslayer(IP):
-        ip_layer = packet[IP]
-        src_ip = ip_layer.src
-        dst_ip = ip_layer.dst
-        
-        protocol = None
-        src_port = None
-        dst_port = None
-        
-        if packet.haslayer(TCP):
-            protocol = "TCP"
-            src_port = packet[TCP].sport
-            dst_port = packet[TCP].dport
-        elif packet.haslayer(UDP):
-            protocol = "UDP"
-            src_port = packet[UDP].sport
-            dst_port = packet[UDP].dport
-            
-        if protocol and src_port and dst_port:
-            matched_rule_id = None
-            
-            # Check if this port is actively monitored by our rules
-            if (protocol, dst_port) in THREAT_SIGNATURES:
-                rule_id, threat_type, keyword = THREAT_SIGNATURES[(protocol, dst_port)]
-                
-                # OPTION B LOGIC: If a keyword exists, perform Deep Packet Inspection
-                if keyword:
-                    if packet.haslayer(Raw): # Does this packet have a data payload?
-                        try:
-                            # Convert raw bytes into readable text
-                            payload = packet[Raw].load.decode('utf-8', errors='ignore')
-                            
-                            # Search the payload for the exact malicious string
-                            if keyword.lower() in payload.lower():
-                                matched_rule_id = rule_id
-                                log_alert_to_db(src_ip, dst_ip, protocol, src_port, dst_port, rule_id, f"{threat_type} [DPI TRIGGER: {keyword}]")
-                        except Exception:
-                            pass
-                
-                # STANDARD LOGIC: If no keyword is set, simply block by Port alone
-                else:
-                    matched_rule_id = rule_id
-                    log_alert_to_db(src_ip, dst_ip, protocol, src_port, dst_port, rule_id, threat_type)
+    src_ip = packet[IP].src
+    dst_ip = packet[IP].dst
+    protocol, src_port, dst_port = None, None, None
+    
+    if packet.haslayer(TCP):
+        protocol, src_port, dst_port = "TCP", packet[TCP].sport, packet[TCP].dport
+    elif packet.haslayer(UDP):
+        protocol, src_port, dst_port = "UDP", packet[UDP].sport, packet[UDP].dport
+    else:
+        return # Skip non-TCP/UDP traffic
 
-            log_all_traffic(src_ip, dst_ip, protocol, src_port, dst_port, matched_rule_id)
+    # 1. Perform Deep Packet Inspection (DPI)
+    dpi_threat = None
+    if packet.haslayer(Raw):
+        payload = packet[Raw].load
+        for name, sig in DPI_SIGNATURES.items():
+            if sig in payload:
+                dpi_threat = name
+                break
+
+    # 2. Assign Rule ID: DPI takes priority
+    matched_rule_id = None
+    if dpi_threat:
+        matched_rule_id = f"DPI: {dpi_threat}"
+        log_alert_to_db(src_ip, dst_ip, protocol, src_port, dst_port, matched_rule_id, dpi_threat)
+    else:
+        # Check standard port rules if no DPI signature found
+        if (protocol, dst_port) in THREAT_SIGNATURES:
+            rule_id, threat_type, keyword = THREAT_SIGNATURES[(protocol, dst_port)]
+            matched_rule_id = rule_id
+            log_alert_to_db(src_ip, dst_ip, protocol, src_port, dst_port, rule_id, threat_type)
+
+    # 3. Log everything to the main stream
+    log_all_traffic(src_ip, dst_ip, protocol, src_port, dst_port, matched_rule_id)
 
 def main():
     print("=" * 60)

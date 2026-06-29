@@ -1,29 +1,21 @@
 from scapy.all import IP, TCP, Raw, send
 import time
 
-def launch_simulated_attack():
-    print("=" * 50)
-    print("      ZETECH NIDS - LIVE FIRE SIMULATOR      ")
-    print("=" * 50)
-    
-    # Target configurations to match your DPI rule
-    target_ip = "127.0.0.1" # Targeting your own local machine
-    target_port = 9090
-    malicious_payload = "This is a HACKER payload"
+print("🔥 Initializing Red Team DPI Attack Vector...")
+time.sleep(1)
 
-    print(f"[*] Forging malicious packet destined for Port {target_port}...")
-    time.sleep(1)
-    
-    # Craft the raw packet: IP Layer -> TCP Layer -> Raw Data Payload
-    attack_packet = IP(dst=target_ip) / TCP(dport=target_port, sport=44444) / Raw(load=malicious_payload)
-    
-    print(f"[+] Injecting Payload: '{malicious_payload}'")
-    # Send the packet onto the network interface
-    send(attack_packet, verbose=False)
-    
-    print("[*] Boom. Packet deployed.")
-    print("[*] Switch over to your NIDS Dashboard to verify interception!")
-    print("=" * 50)
+target_ip = "192.168.1.109"  # <-- Make sure this is your local network IP
+target_port = 80           # Targeting HTTP port
+# Sending a classic SQL injection attempt
+payload_data = "GET /login.php?user=' OR 1=1-- HTTP/1.1\r\nHost: target\r\n\r\n"
 
-if __name__ == "__main__":
-    launch_simulated_attack()
+print(f"🎯 Forging SQL Injection packet to {target_ip}:{target_port}...")
+
+malicious_packet = IP(dst=target_ip) / TCP(dport=target_port, flags="PA") / Raw(load=payload_data)
+
+try:
+    send(malicious_packet, verbose=False)
+    print("✅ SQLi Ghost packet injected successfully!")
+    print("👀 Check the dashboard. The DPI engine should flag this!")
+except PermissionError:
+    print("❌ ERROR: You must run this script with 'sudo'.")

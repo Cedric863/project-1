@@ -280,7 +280,7 @@ def api_settings():
     except Exception as e:
         return jsonify({"error": str(e)})
 
-@app.route('/api/export/alerts')
+@app.route('/export/alerts')
 @login_required
 def export_alerts():
     try:
@@ -296,7 +296,7 @@ def export_alerts():
     except Exception as e:
         return jsonify({"error": str(e)})
 
-@app.route('/api/export/logs')
+@app.route('/export/logs')
 @login_required
 def export_logs():
     try:
