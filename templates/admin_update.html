@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Zetech NIDS - Credentials</title>
+    <style>
+        body { background-color: #121212; color: #ffffff; font-family: 'Segoe UI', Tahoma, sans-serif; margin: 0; padding: 20px; }
+        .header-container { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 40px; }
+        h1 { margin: 0; font-size: 1.5rem; color: #3b82f6; }
+        .back-link { color: #aaaaaa; text-decoration: none; font-size: 1rem; transition: 0.2s; }
+        .back-link:hover { color: #ffffff; }
+        .centered-card { max-width: 600px; margin: 0 auto; background: #1e1e1e; border: 1px solid #333; padding: 30px; border-radius: 4px; }
+        .form-group { display: flex; flex-direction: column; gap: 5px; margin-bottom: 20px; }
+        .form-group label { font-size: 0.9rem; color: #aaa; }
+        .form-group input { background: #121212; color: #fff; border: 1px solid #444; padding: 12px; border-radius: 4px; font-size: 1rem; }
+        .form-submit-btn { width: 100%; background: #3b82f6; color: #ffffff; border: none; padding: 15px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 1.1rem; transition: 0.2s; }
+        .form-submit-btn:hover { background: #1d4ed8; }
+    </style>
+</head>
+<body>
+    <div class="header-container">
+        <h1>⚙️ UPDATE CREDENTIALS</h1>
+        <a href="/" class="back-link">&larr; Back to Dashboard</a>
+    </div>
+    <div class="centered-card">
+        <form id="admin-form" onsubmit="submitAdminUpdate(event)">
+            <div class="form-group">
+                <label>Administrator Username</label>
+                <input type="text" id="admin-username" required value="{{ username }}">
+            </div>
+            <div class="form-group">
+                <label>New Master Password (Optional)</label>
+                <input type="password" id="admin-password" placeholder="Leave blank to keep current password">
+            </div>
+            <button type="submit" class="form-submit-btn">Update Security Credentials</button>
+        </form>
+    </div>
+    <script>
+        async function submitAdminUpdate(e) {
+            e.preventDefault();
+            const payload = { username: document.getElementById('admin-username').value, password: document.getElementById('admin-password').value };
+            const response = await fetch('/api/admin/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            const data = await response.json();
+            if (data.success) { alert(data.message); document.getElementById('admin-password').value = ""; } else { alert("Error: " + data.error); }
+        }
+    </script>
+</body>
+</html>

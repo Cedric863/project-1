@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Zetech NIDS - Remove Rule</title>
+    <style>
+        body { background-color: #121212; color: #ffffff; font-family: 'Segoe UI', Tahoma, sans-serif; margin: 0; padding: 20px; }
+        .header-container { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 40px; }
+        h1 { margin: 0; font-size: 1.5rem; color: #ef4444; }
+        .back-link { color: #aaaaaa; text-decoration: none; font-size: 1rem; transition: 0.2s; }
+        .back-link:hover { color: #ffffff; }
+        .centered-card { max-width: 600px; margin: 0 auto; background: #1e1e1e; border: 1px solid #333; padding: 30px; border-radius: 4px; }
+        .form-group { display: flex; flex-direction: column; gap: 5px; margin-bottom: 20px; }
+        .form-group label { font-size: 0.9rem; color: #aaa; }
+        .form-group input { background: #121212; color: #fff; border: 1px solid #444; padding: 12px; border-radius: 4px; font-size: 1rem; }
+        .form-submit-btn { width: 100%; background: #ef4444; color: #ffffff; border: none; padding: 15px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 1.1rem; transition: 0.2s; }
+        .form-submit-btn:hover { background: #b91c1c; }
+    </style>
+</head>
+<body>
+    <div class="header-container">
+        <h1>- REVOKE SIGNATURE RULE</h1>
+        <a href="/" class="back-link">&larr; Back to Dashboard</a>
+    </div>
+    <div class="centered-card">
+        <form id="remove-rule-form" onsubmit="removeRule(event)">
+            <div class="form-group">
+                <label>Rule ID to Delete</label>
+                <input type="number" id="remove-rule-id" required placeholder="Target SID">
+            </div>
+            <button type="submit" class="form-submit-btn">Purge Rule from Database</button>
+        </form>
+        <div style="margin-top: 20px; font-size: 0.9rem; color: #888; text-align: center;">
+            *Note: Changes sync to the NIDS engine within 6 seconds. <br>View active rules on the <a href="/threats" style="color: #3b82f6;">Threats page</a>.
+        </div>
+    </div>
+    <script>
+        async function removeRule(e) {
+            e.preventDefault();
+            const targetId = document.getElementById('remove-rule-id').value;
+            if(confirm(`Are you absolutely sure you want to delete Rule ID ${targetId}?`)) {
+                const response = await fetch('/api/rules/remove', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rule_id: targetId }) });
+                const data = await response.json();
+                if (data.success) { alert(data.message); document.getElementById('remove-rule-form').reset(); } else { alert("Error: " + data.error); }
+            }
+        }
+    </script>
+</body>
+</html>

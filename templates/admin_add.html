@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Zetech NIDS - Add Rule</title>
+    <style>
+        body { background-color: #121212; color: #ffffff; font-family: 'Segoe UI', Tahoma, sans-serif; margin: 0; padding: 20px; }
+        .header-container { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 40px; }
+        h1 { margin: 0; font-size: 1.5rem; color: #facc15; }
+        .back-link { color: #aaaaaa; text-decoration: none; font-size: 1rem; transition: 0.2s; }
+        .back-link:hover { color: #ffffff; }
+        .centered-card { max-width: 600px; margin: 0 auto; background: #1e1e1e; border: 1px solid #333; padding: 30px; border-radius: 4px; }
+        .form-group { display: flex; flex-direction: column; gap: 5px; margin-bottom: 20px; }
+        .form-group label { font-size: 0.9rem; color: #aaa; }
+        .form-group input, .form-group select { background: #121212; color: #fff; border: 1px solid #444; padding: 12px; border-radius: 4px; font-size: 1rem; }
+        .form-submit-btn { width: 100%; background: #facc15; color: #121212; border: none; padding: 15px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 1.1rem; transition: 0.2s; }
+        .form-submit-btn:hover { background: #ca8a04; }
+    </style>
+</head>
+<body>
+    <div class="header-container">
+        <h1>+ DEPLOY SIGNATURE RULE (DPI ENABLED)</h1>
+        <a href="/" class="back-link">&larr; Back to Dashboard</a>
+    </div>
+    <div class="centered-card">
+        <form id="rule-form" onsubmit="submitRule(event)">
+            <div class="form-group"><label>Rule ID (Numeric unique SID)</label><input type="number" id="rule-id" required placeholder="e.g. 1005"></div>
+            <div class="form-group"><label>Threat Designation Label</label><input type="text" id="threat-type" required placeholder="e.g. SQL Injection Attempt"></div>
+            <div class="form-group">
+                <label>Protocol Match</label>
+                <select id="rule-protocol">
+                    <option value="TCP">TCP</option>
+                    <option value="UDP">UDP</option>
+                </select>
+            </div>
+            <div class="form-group"><label>Target Monitored Port</label><input type="number" id="rule-port" required placeholder="e.g. 80"></div>
+            
+            <div class="form-group">
+                <label style="color: #38bdf8;">Deep Packet Inspection Keyword (Optional)</label>
+                <input type="text" id="payload-keyword" placeholder="e.g. 'admin' or 'UNION SELECT'">
+                <small style="color:#666; font-size:0.8rem; margin-top:4px;">If left blank, the NIDS will block traffic by Port alone.</small>
+            </div>
+
+            <button type="submit" class="form-submit-btn">Deploy to Engine</button>
+        </form>
+    </div>
+    <script>
+        async function submitRule(e) {
+            e.preventDefault();
+            const payload = { 
+                rule_id: document.getElementById('rule-id').value, 
+                threat_type: document.getElementById('threat-type').value, 
+                protocol: document.getElementById('rule-protocol').value, 
+                port: document.getElementById('rule-port').value,
+                payload_keyword: document.getElementById('payload-keyword').value // Grab the keyword
+            };
+            const response = await fetch('/api/rules/add', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            const data = await response.json();
+            if (data.success) { alert(data.message); document.getElementById('rule-form').reset(); } else { alert("Error: " + data.error); }
+        }
+    </script>
+</body>
+</html>

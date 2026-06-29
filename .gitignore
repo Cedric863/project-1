@@ -1,0 +1,13 @@
+# Python Cache
+__pycache__/
+*.pyc
+
+# Database
+*.db
+*.sqlite3
+
+# OS Files
+.DS_Store
+
+# IDE Files
+.vscode/

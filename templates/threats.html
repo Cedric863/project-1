@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zetech NIDS - Threats</title>
+    <style>
+        body { background-color: #121212; color: #ffffff; font-family: 'Segoe UI', Tahoma, sans-serif; margin: 0; padding: 20px; }
+        .header-container { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 20px; }
+        h1 { margin: 0; font-size: 1.5rem; letter-spacing: 1px; color: #ef4444; }
+        .back-link { color: #aaaaaa; text-decoration: none; font-size: 1rem; transition: 0.2s; }
+        .back-link:hover { color: #ffffff; }
+
+        /* Toggle Buttons */
+        .toggle-container { display: flex; gap: 10px; margin-bottom: 20px; }
+        .toggle-btn { flex: 1; background: #1e1e1e; color: #aaa; border: 1px solid #555; padding: 15px; font-size: 1.1rem; font-weight: bold; cursor: pointer; border-radius: 4px; transition: 0.2s; }
+        .toggle-btn.active { background: #38bdf8; color: #121212; border-color: #38bdf8; }
+
+        /* Tables */
+        .dashboard-section { background: #1e1e1e; padding: 15px; border: 1px solid #333; border-radius: 4px; display: none; }
+        .dashboard-section.active { display: block; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #333; }
+        th { background-color: #121212; color: #aaa; }
+    </style>
+</head>
+<body>
+
+    <div class="header-container">
+        <h1>🚨 THREAT MANAGEMENT</h1>
+        <a href="/" class="back-link">&larr; Back to Dashboard</a>
+    </div>
+
+    <div class="toggle-container">
+        <button id="btn-alerts" class="toggle-btn active" onclick="switchTab('alerts')">View Threats (ALERT_LOG)</button>
+        <button id="btn-rules" class="toggle-btn" onclick="switchTab('rules')">Rule ID (SIGNATURE_RULE)</button>
+    </div>
+
+    <div id="section-alerts" class="dashboard-section active">
+        <table>
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>Source IP</th>
+                    <th>Target IP</th>
+                    <th>Protocol</th>
+                    <th>Ports (Src ➔ Dst)</th>
+                    <th>Rule ID</th>
+                </tr>
+            </thead>
+            <tbody id="alerts-body">
+                </tbody>
+        </table>
+    </div>
+
+    <div id="section-rules" class="dashboard-section">
+        <table>
+            <thead>
+                <tr>
+                    <th>Rule ID</th>
+                    <th>Threat Type</th>
+                    <th>Protocol</th>
+                    <th>Target Port</th>
+                </tr>
+            </thead>
+            <tbody id="rules-body">
+                </tbody>
+        </table>
+    </div>
+
+    <script>
+        // Tab Switching Logic
+        function switchTab(tabName) {
+            // Reset buttons and sections
+            document.getElementById('btn-alerts').classList.remove('active');
+            document.getElementById('btn-rules').classList.remove('active');
+            document.getElementById('section-alerts').classList.remove('active');
+            document.getElementById('section-rules').classList.remove('active');
+
+            // Activate selected tab
+            document.getElementById(`btn-${tabName}`).classList.add('active');
+            document.getElementById(`section-${tabName}`).classList.add('active');
+        }
+
+        // Fetch Alert Logs
+        async function fetchAlerts() {
+            const response = await fetch('/api/alerts');
+            const data = await response.json();
+            const tbody = document.getElementById('alerts-body');
+            tbody.innerHTML = ''; 
+            data.forEach(alert => {
+                tbody.innerHTML += `
+                <tr style="color: #ef4444; font-weight: bold; background-color: rgba(239, 68, 68, 0.05);">
+                    <td>${alert.time_logged}</td>
+                    <td>${alert.source_ip}</td>
+                    <td>${alert.dest_ip}</td>
+                    <td>${alert.protocol}</td>
+                    <td>${alert.src_port} ➔ ${alert.dst_port}</td>
+                    <td>[Rule ${alert.rule_id}]</td>
+                </tr>`;
+            });
+        }
+
+        // Fetch Signature Rules
+        async function fetchRules() {
+            const response = await fetch('/api/rules');
+            const data = await response.json();
+            const tbody = document.getElementById('rules-body');
+            tbody.innerHTML = ''; 
+            data.forEach(rule => {
+                tbody.innerHTML += `
+                <tr>
+                    <td style="color: #38bdf8; font-weight: bold;">Rule ${rule.rule_id}</td>
+                    <td>${rule.threat_type}</td>
+                    <td>${rule.protocol}</td>
+                    <td style="color: #facc15;">Port ${rule.port}</td>
+                </tr>`;
+            });
+        }
+
+        // Run fetches immediately on load
+        fetchAlerts();
+        fetchRules();
+        
+        // Refresh alerts periodically just like the main dashboard
+        setInterval(fetchAlerts, 2000);
+    </script>
+</body>
+</html>
