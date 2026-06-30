@@ -41,6 +41,126 @@ def load_signatures_into_memory():
     except sqlite3.OperationalError:
         pass
 
+
+def start_port_scan_detector():
+    """
+    Background worker that monitors the database to detect if a 
+    single IP is probing multiple distinct ports (Reconnaissance).
+    """
+    print("[*] Zetech NIDS: Port Scan Detection Module Activated.")
+    
+    while True:
+        try:
+            # Open connection using WAL mode to prevent locking issues with the sniffer
+            conn = sqlite3.connect('zetech_nids.db', timeout=5)
+            conn.execute('PRAGMA journal_mode=WAL;')
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+
+            # SQL Analysis: Find IPs hitting 15+ DISTINCT ports within the last 10 seconds
+            analysis_query = """
+                SELECT source_ip, COUNT(DISTINCT dst_port) as unique_ports_hit,
+                       MAX(dest_ip) as dest_ip, MAX(protocol) as protocol,
+                       MAX(src_port) as src_port, MAX(dst_port) as dst_port
+                FROM LOGS
+                WHERE time_logged >= datetime('now', '-10 seconds', 'localtime')
+                GROUP BY source_ip
+                HAVING unique_ports_hit >= 15
+            """
+            cursor.execute(analysis_query)
+            suspects = cursor.fetchall()
+
+            for suspect in suspects:
+                attacker_ip = suspect['source_ip']
+                ports_counted = suspect['unique_ports_hit']
+                
+                # Anti-Spam Check: Don't flood the ALERT_LOG if we already flagged this IP in the last 30 seconds
+                cursor.execute("""
+                    SELECT 1 FROM ALERT_LOG 
+                    WHERE source_ip = ? AND rule_id = 9001
+                    AND time_logged >= datetime('now', '-30 seconds', 'localtime')
+                    LIMIT 1
+                """, (attacker_ip,))
+                
+                if not cursor.fetchone():
+                    # Rule 9001 designated for Port Scan Detection
+                    print(f"[🚨] ALERT: Port Scan detected from {attacker_ip}! Probed {ports_counted} unique ports.")
+                    
+                    cursor.execute("""
+                        INSERT INTO ALERT_LOG (time_logged, source_ip, dest_ip, protocol, src_port, dst_port, rule_id)
+                        VALUES (datetime('now', 'localtime'), ?, ?, ?, ?, ?, 9001)
+                    """, (attacker_ip, suspect['dest_ip'], suspect['protocol'], suspect['src_port'], suspect['dst_port']))
+                    
+                    conn.commit()
+
+            conn.close()
+        except Exception as e:
+            print(f"[-] Port Scan Detector Error: {e}")
+        
+        # Analyze the database state every 3 seconds
+        time.sleep(3)
+
+# To spin this engine loop up alongside your sniffer, add this to your main startup logic:
+# threading.Thread(target=start_port_scan_detector, daemon=True).start()
+
+def start_packet_flood_detector():
+    """
+    Background worker that monitors the database to detect if a 
+    single IP is flooding the network with excessive traffic volume (DoS).
+    """
+    print("[*] Zetech NIDS: Packet Flood Detection Module Activated.")
+    
+    while True:
+        try:
+            conn = sqlite3.connect('zetech_nids.db', timeout=5)
+            conn.execute('PRAGMA journal_mode=WAL;')
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+
+            # SQL Analysis: Find any IP sending more than 200 packets in the last 2 seconds
+            analysis_query = """
+                SELECT source_ip, COUNT(*) as packet_count,
+                       MAX(dest_ip) as dest_ip, MAX(protocol) as protocol,
+                       MAX(src_port) as src_port, MAX(dst_port) as dst_port
+                FROM LOGS
+                WHERE time_logged >= datetime('now', '-2 seconds', 'localtime')
+                GROUP BY source_ip
+                HAVING packet_count >= 200
+            """
+            cursor.execute(analysis_query)
+            suspects = cursor.fetchall()
+
+            for suspect in suspects:
+                attacker_ip = suspect['source_ip']
+                volume = suspect['packet_count']
+                
+                # Anti-Spam Check: Don't flood the ALERT_LOG if we already flagged this flood in the last 20 seconds
+                cursor.execute("""
+                    SELECT 1 FROM ALERT_LOG 
+                    WHERE source_ip = ? AND rule_id = 9002
+                    AND time_logged >= datetime('now', '-20 seconds', 'localtime')
+                    LIMIT 1
+                """, (attacker_ip,))
+                
+                if not cursor.fetchone():
+                    # Rule 9002 designated for Packet Flooding / DoS Detection
+                    print(f"[🚨] ALERT: Packet Flood detected from {attacker_ip}! Volume: {volume} packets/2s.")
+                    
+                    cursor.execute("""
+                        INSERT INTO ALERT_LOG (time_logged, source_ip, dest_ip, protocol, src_port, dst_port, rule_id)
+                        VALUES (datetime('now', 'localtime'), ?, ?, ?, ?, ?, 9002)
+                    """, (attacker_ip, suspect['dest_ip'], suspect['protocol'], suspect['src_port'], suspect['dst_port']))
+                    
+                    conn.commit()
+
+            conn.close()
+        except Exception as e:
+            print(f"[-] Packet Flood Detector Error: {e}")
+        
+        # Check velocity every 1 second for rapid response
+        time.sleep(1)
+ 
+
 def engine_command_monitor():
     global ENGINE_ACTIVE
     counter = 0
@@ -187,6 +307,9 @@ def main():
     load_signatures_into_memory()
     threading.Thread(target=log_janitor, daemon=True).start()
     threading.Thread(target=engine_command_monitor, daemon=True).start()
+    threading.Thread(target=start_port_scan_detector, daemon=True).start()
+    threading.Thread(target=start_packet_flood_detector, daemon=True).start()
+    
     
     print("[*] Monitoring network interface cards for traffic and intrusions...")
     try:
