@@ -1,6 +1,7 @@
 import sqlite3
 import csv
 import io
+from scapy.interfaces import get_if_list
 from flask import Flask, jsonify, render_template, request, session, redirect, url_for, Response
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
@@ -256,27 +257,48 @@ def engine_set():
     except Exception as e:
         return jsonify({"error": str(e)})
 
-# --- NEW: Fix for Log Retention Settings ---
+# --- UPDATED SETTINGS ROUTE (Handles Interface & Retention) ---
 @app.route('/api/settings', methods=['GET', 'POST'])
 @login_required
 def api_settings():
     try:
         conn = get_db_connection()
-        # Make sure the table exists just in case
         conn.execute('CREATE TABLE IF NOT EXISTS SYSTEM_SETTINGS (id INTEGER PRIMARY KEY CHECK (id = 1), retention_hours INTEGER)')
-        conn.execute('INSERT OR IGNORE INTO SYSTEM_SETTINGS (id, retention_hours) VALUES (1, 24)')
+        
+        # Safely attempt to add the new interface column if it doesn't exist
+        try:
+            conn.execute('ALTER TABLE SYSTEM_SETTINGS ADD COLUMN interface TEXT')
+        except sqlite3.OperationalError:
+            pass 
+            
+        conn.execute('INSERT OR IGNORE INTO SYSTEM_SETTINGS (id, retention_hours, interface) VALUES (1, 24, "")')
         
         if request.method == 'POST':
             data = request.json
             new_hours = data.get('retention_hours', 24)
-            conn.execute('UPDATE SYSTEM_SETTINGS SET retention_hours = ? WHERE id = 1', (int(new_hours),))
+            new_interface = data.get('interface', '')
+            conn.execute('UPDATE SYSTEM_SETTINGS SET retention_hours = ?, interface = ? WHERE id = 1', (int(new_hours), new_interface))
             conn.commit()
             conn.close()
             return jsonify({"success": True})
         else:
-            row = conn.execute('SELECT retention_hours FROM SYSTEM_SETTINGS WHERE id = 1').fetchone()
+            row = conn.execute('SELECT retention_hours, interface FROM SYSTEM_SETTINGS WHERE id = 1').fetchone()
             conn.close()
-            return jsonify({"retention_hours": row['retention_hours'] if row else 24})
+            return jsonify({
+                "retention_hours": row['retention_hours'] if row else 24,
+                "interface": row['interface'] if row else ""
+            })
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
+# --- NEW API ROUTE: Get Available OS Network Cards ---
+@app.route('/api/interfaces')
+@login_required
+def api_interfaces():
+    try:
+        # Scapy natively lists all active interfaces on the host OS
+        ifaces = get_if_list()
+        return jsonify({"interfaces": ifaces})
     except Exception as e:
         return jsonify({"error": str(e)})
 

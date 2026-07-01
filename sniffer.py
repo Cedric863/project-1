@@ -310,12 +310,29 @@ def main():
     threading.Thread(target=start_port_scan_detector, daemon=True).start()
     threading.Thread(target=start_packet_flood_detector, daemon=True).start()
     
+    print("[*] Checking system settings for designated network interface...")
     
-    print("[*] Monitoring network interface cards for traffic and intrusions...")
+    # --- NEW ADDITION: Fetch the user's selected interface from the database ---
+    conn = get_db_connection()
     try:
-        sniff(prn=packet_callback, store=False)
-    except PermissionError:
-        print("\n[ERROR] Raw socket binding requires privileges.")
+        # We use row_factory to easily grab the column by name
+        conn.row_factory = sqlite3.Row 
+        row = conn.execute("SELECT interface FROM SYSTEM_SETTINGS WHERE id = 1").fetchone()
+        selected_iface = row['interface'] if row and row['interface'] else None
+    except Exception:
+        selected_iface = None
+    finally:
+        conn.close()
 
+    # --- NEW ADDITION: Bind the sniffer dynamically based on UI selection ---
+    try:
+        if selected_iface:
+            print(f"[*] Binding engine strictly to target interface: {selected_iface}")
+            sniff(iface=selected_iface, prn=packet_callback, store=False)
+        else:
+            print("[*] No specific interface selected. Binding to all default routes...")
+            sniff(prn=packet_callback, store=False)
+    except PermissionError:
+        print("\n[ERROR] Raw socket binding requires privileges. Run as root/admin.")
 if __name__ == "__main__":
     main()
