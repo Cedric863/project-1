@@ -163,7 +163,7 @@
                 });
                 if (res.ok) {
                     const status = document.getElementById('save-status');
-                    status.style.display = 'block';
+                    status.style.display = 'flagged';
                     setTimeout(() => status.style.display = 'none', 2000);
                 }
             } catch (error) { console.error("Error saving settings:", error); }
@@ -195,7 +195,7 @@
                 const tbody = document.getElementById('logs-body');
                 tbody.innerHTML = ''; 
                 data.forEach(log => {
-                    const status = log.rule_id ? `<span style="color:#ef4444; font-weight:bold;">BLOCKED (Rule ${log.rule_id})</span>` : "CLEAN";
+                    const status = log.rule_id ? `<span style="color:#ef4444; font-weight:bold;">FLAGGED (Rule ${log.rule_id})</span>` : "CLEAN";
                     tbody.innerHTML += `
                     <tr class="log-row">
                         <td>${log.time_logged}</td>

