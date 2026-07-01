@@ -1,7 +1,8 @@
 import sqlite3
 import csv
 import io
-from scapy.interfaces import get_if_list
+import socket
+import os
 from flask import Flask, jsonify, render_template, request, session, redirect, url_for, Response
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
@@ -296,11 +297,16 @@ def api_settings():
 @login_required
 def api_interfaces():
     try:
-        # Scapy natively lists all active interfaces on the host OS
-        ifaces = get_if_list()
+        # Primary Method: Use Python's built-in socket library
+        ifaces = [iface[1] for iface in socket.if_nameindex()]
         return jsonify({"interfaces": ifaces})
     except Exception as e:
-        return jsonify({"error": str(e)})
+        # Fallback Method: Strictly for Linux if socket fails
+        try:
+            ifaces = os.listdir('/sys/class/net/')
+            return jsonify({"interfaces": ifaces})
+        except Exception as backup_e:
+            return jsonify({"error": "Failed to read OS interfaces", "interfaces": []})
 
 @app.route('/export/alerts')
 @login_required

@@ -104,62 +104,51 @@ def start_port_scan_detector():
 # threading.Thread(target=start_port_scan_detector, daemon=True).start()
 
 def start_packet_flood_detector():
-    """
-    Background worker that monitors the database to detect if a 
-    single IP is flooding the network with excessive traffic volume (DoS).
-    """
     print("[*] Zetech NIDS: Packet Flood Detection Module Activated.")
-    
     while True:
         try:
             conn = sqlite3.connect('zetech_nids.db', timeout=5)
-            conn.execute('PRAGMA journal_mode=WAL;')
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
 
-            # SQL Analysis: Find any IP sending more than 200 packets in the last 2 seconds
+            # UPDATED: Lowered threshold to 100 and made the time window more resilient
             analysis_query = """
                 SELECT source_ip, COUNT(*) as packet_count,
                        MAX(dest_ip) as dest_ip, MAX(protocol) as protocol,
                        MAX(src_port) as src_port, MAX(dst_port) as dst_port
                 FROM LOGS
-                WHERE time_logged >= datetime('now', '-2 seconds', 'localtime')
+                WHERE time_logged >= datetime('now', '-5 seconds', 'localtime')
                 GROUP BY source_ip
-                HAVING packet_count >= 200
+                HAVING packet_count >= 100
             """
             cursor.execute(analysis_query)
             suspects = cursor.fetchall()
 
             for suspect in suspects:
                 attacker_ip = suspect['source_ip']
-                volume = suspect['packet_count']
                 
-                # Anti-Spam Check: Don't flood the ALERT_LOG if we already flagged this flood in the last 20 seconds
+                # Check if we ALREADY alerted for this IP in the last 10 seconds 
+                # (prevents alert spamming during a massive flood)
                 cursor.execute("""
                     SELECT 1 FROM ALERT_LOG 
                     WHERE source_ip = ? AND rule_id = 9002
-                    AND time_logged >= datetime('now', '-20 seconds', 'localtime')
+                    AND time_logged >= datetime('now', '-10 seconds', 'localtime')
                     LIMIT 1
                 """, (attacker_ip,))
                 
                 if not cursor.fetchone():
-                    # Rule 9002 designated for Packet Flooding / DoS Detection
-                    print(f"[🚨] ALERT: Packet Flood detected from {attacker_ip}! Volume: {volume} packets/2s.")
-                    
+                    print(f"[🚨] ALERT: Packet Flood detected from {attacker_ip}!")
                     cursor.execute("""
                         INSERT INTO ALERT_LOG (time_logged, source_ip, dest_ip, protocol, src_port, dst_port, rule_id)
                         VALUES (datetime('now', 'localtime'), ?, ?, ?, ?, ?, 9002)
                     """, (attacker_ip, suspect['dest_ip'], suspect['protocol'], suspect['src_port'], suspect['dst_port']))
-                    
                     conn.commit()
 
             conn.close()
         except Exception as e:
             print(f"[-] Packet Flood Detector Error: {e}")
         
-        # Check velocity every 1 second for rapid response
-        time.sleep(1)
- 
+        time.sleep(1) # Check every second
 
 def engine_command_monitor():
     global ENGINE_ACTIVE
@@ -236,11 +225,14 @@ def log_all_traffic(src_ip, dst_ip, protocol, src_port, dst_port, rule_id=None):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute('''INSERT INTO LOGS (source_ip, dest_ip, protocol, src_port, dst_port, rule_id)
-                          VALUES (?, ?, ?, ?, ?, ?)''', (src_ip, dst_ip, protocol, src_port, dst_port, rule_id))
+        # Explicitly inserting the local timestamp into the table
+        cursor.execute('''INSERT INTO LOGS (time_logged, source_ip, dest_ip, protocol, src_port, dst_port, rule_id)
+                          VALUES (datetime('now', 'localtime'), ?, ?, ?, ?, ?, ?)''', 
+                       (src_ip, dst_ip, protocol, src_port, dst_port, rule_id))
         conn.commit()
         conn.close()
-    except Exception:
+    except Exception as e:
+        print(f"[-] Database Write Error: {e}")
         pass 
 
 def log_alert_to_db(src_ip, dst_ip, protocol, src_port, dst_port, rule_id, threat_type):
